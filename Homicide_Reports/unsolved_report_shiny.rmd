@@ -335,7 +335,7 @@ high_weap_name <- high_weap[[1]]
 
 ```
 
-Table 2 below looks at the murder weapons used in unsolved homicides. They are listed in descending order by the highest count. The percent column shows what percentage of unsolved homicides are made up by the murder weapon. Most unsolved homicides in `r i` are committed by `r high_weap_name` with a total of `r high_weap_count`.
+Table 3 below looks at the murder weapons used in unsolved homicides. They are listed in descending order by the highest count. The percent column shows what percentage of unsolved homicides are made up by the murder weapon. Most unsolved homicides in `r i` are committed by `r high_weap_name` with a total of `r high_weap_count`.
 
 ```{r Murder-Weapon-Kable}
 kable(murder_weap, align="c", caption=paste("Unsolved Homicides by Murder Weapon from",min_year,"to",max_year))

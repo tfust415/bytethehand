@@ -1,0 +1,513 @@
+---
+title: "Unsolved Homicide Report"
+output: pdf_document
+---
+  
+  *All data sourced from the Murder Accountability Project - http://www.murderdata.org/
+  
+```{r global.options, include=FALSE}
+
+knitr::opts_chunk$set(echo=FALSE,
+                      warning=FALSE)
+```
+
+```{r Loading-Library, include=FALSE}
+
+#Packages
+library(dplyr)
+library(tidyverse)
+library(tinytex)
+library(ggplot2)
+library(gridExtra)
+library(float)
+library(ggplot2)
+library(knitr)
+
+```
+
+```{r General-Homicide-Tables,include=FALSE}
+
+#this is the general homicide overview
+
+total_homi <- supp_homi_fips %>%
+  filter(State==i)%>%
+  mutate(min_year = input$years[1])%>% #Taking max and min year from selected input
+  mutate(max_year = input$years[2]) %>%
+  #mutate(min_year=2010)%>% #For Testing
+  #mutate(max_year=2019)%>% #For Testing
+  filter(Year >= min_year & Year <= max_year)%>%
+  mutate(unsolved_homi=sum(Solved=='No'))%>% #sum of unsolved
+  mutate(solved_homi=sum(Solved=='Yes'))%>% #sum of solved
+  mutate(count=1)%>% #case count
+  mutate(homicide_total=sum(count))
+
+#organized for graphing
+solve_graph <- select(total_homi, Unsolved=unsolved_homi, Solved=solved_homi)%>%
+  gather(Unsolved, Solved, key='Case Outcome', value='Total')%>%
+  unique()%>%
+  mutate(x='Homicide Cases')
+
+#subsetting homicount and clear rate
+homi_count <- sum(total_homi$solved_homi[[1]], total_homi$unsolved_homi[[1]])
+
+clear_rate <- round((total_homi$solved_homi[[1]]/homi_count)*100,2)
+
+#this is the sex section
+vic_sex <- select(supp_homi_fips,Year,State,VicSex)%>%
+  filter(State==i)%>%
+  mutate(min_year = input$years[1])%>% #Taking max and min year from selected input
+  mutate(max_year = input$years[2]) %>%
+  #mutate(min_year=2010)%>% #For Testing
+  #mutate(max_year=2019)%>% #For Testing
+  filter(Year >= min_year & Year <= max_year)%>%
+  mutate(Male_Vic = sum(VicSex=='Male'))%>%
+  mutate(Female_Vic = sum(VicSex=='Female'))%>%
+  mutate(Unknown_Vic = sum(VicSex=='Unknown'))%>%
+  unique()
+
+#organized for victim sex graph
+sex_graph <- select(vic_sex, Male=Male_Vic,Female=Female_Vic, Unknown=Unknown_Vic)%>%
+  gather(Male,Female,Unknown, key='Victim Sex', value='Total')%>%
+  unique()
+
+#offender sex
+off_sex <- select(supp_homi_fips,State,OffSex, Year) %>%
+  filter(State==i)%>%
+  mutate(min_year = input$years[1])%>% #Taking max and min year from selected input
+  mutate(max_year = input$years[2]) %>%
+  #mutate(min_year=2010)%>% #For Testing
+  #mutate(max_year=2019)%>% #For Testing
+  filter(Year >= min_year & Year <= max_year)%>%
+  mutate(`Male Offender`=sum(OffSex=='Male'))%>%
+  mutate(`Female Offender`=sum(OffSex=='Female'))%>%
+  mutate(`Offender Sex Unknown`=sum(OffSex=='Unknown'))
+
+#subsetting offender sex values
+male_off <- off_sex$`Male Offender`[[1]]
+female_off <- off_sex$`Female Offender`[[1]]
+unknown_off <- off_sex$`Offender Sex Unknown`[[1]]
+
+#offender sex graph
+off_sex_graph <- select(off_sex, Male=`Male Offender`, Female=`Female Offender`, `Sex Unknown`=`Offender Sex Unknown`)%>%
+  gather(`Male`,`Female`,`Sex Unknown`, key='Offender Sex', value='Offender Total')%>%
+  unique()
+
+#putting min/max years into values
+min_year <- input$years[1]
+max_year <- input$years[2]
+
+#min_year <- 2010
+#max_year <- 2019
+
+```
+
+# State of `r i` `r min_year` to `r max_year`
+
+## Homicide Statistics from `r total_homi$min_year[[1]]` to `r total_homi$max_year[[1]]`
+
+There have been `r homi_count` homicides since `r total_homi$min_year[[1]]`. A total of `r total_homi$unsolved_homi[[1]]` remain unsolved. The homicide clearance rate is `r clear_rate`%. Figure 1 below shows the total cases broken down by solved and unsolved. This does not represent the number of victims. Homicide cases may include more than one victim or offender.
+
+
+```{r Clearance-graph-all, fig.width=6, fig.height=4}
+
+ggplot(data=solve_graph, aes(x=x, y=Total, fill=forcats::fct_rev(`Case Outcome`))) + geom_histogram(stat='identity') + theme_classic() + xlab('') +
+  geom_text(aes(x=x,y=Total,label=Total), position=position_stack(vjust=.5)) + ggtitle(paste('Figure 1. Homicide Case Clearance', total_homi$min_year[[1]], 'to', total_homi$max_year[[1]])) + labs(fill='Case Outcome') + ylab('Total Homicide Cases') + theme(plot.title=element_text(size=10))
+
+```
+
+\newpage
+
+## Unsolved by Race and Sex - `r total_homi$min_year[[1]]` to `r total_homi$max_year[[1]]`
+
+```{r Unsolved-Tables, include=FALSE}
+
+#A table with the sum of the victims and murder weaposn in unsolved homicide cases
+
+unsolved_homis <- supp_homi_fips %>%
+  filter(State==i)%>%
+  mutate(min_year = input$years[1])%>% #Taking max and min year from selected input
+  mutate(max_year = input$years[2]) %>%
+  #mutate(min_year=2010)%>% #For Testing
+  #mutate(max_year=2019)%>% #For Testing
+  filter(Year >= min_year & Year <= max_year)%>%
+  filter(Solved=='No')%>% #keeping only unsolved homicides
+  mutate(Female=sum(VicSex=='Female'))%>%
+  mutate(Male=sum(VicSex=='Male'))%>%
+  mutate(Unknown=sum(VicRace=='Unknown'))%>%
+  mutate(White=sum(VicRace=='White'))%>%
+  mutate(`American Indian or Alaskan Native`=sum(VicRace=='American Indian or Alaskan Native'))%>%
+  mutate(Black=sum(VicRace=='Black'))%>%
+  mutate(Asian=sum(VicRace=='Asian'))%>%
+  mutate(`Unknown Race`=sum(VicRace=='Unknown'))%>%
+  mutate(`Native Hawaiian or Pacific Islander`=sum(VicRace=='Native Hawaiian or Pacific Islander'))%>%
+  #White victims
+  mutate(`Female White`=sum(VicSex=='Female'&VicRace=='White'))%>%
+  mutate(`Male White`=sum(VicSex=='Male'&VicRace=='White'))%>%
+  mutate(`Unknown White`=sum(VicSex=='Unknown'&VicRace=='White'))%>%
+  #American Indian/Native Alaskan Victims
+  mutate(`Female A.I./A.N.`=sum(VicSex=='Female'&VicRace=='American Indian or Alaskan Native'))%>%
+  mutate(`Male A.I./A.N.`=sum(VicSex=='Male' & VicRace=='American Indian or Alaskan Native'))%>%
+  mutate(`Unknown A.I./A.N.`=sum(VicSex=='Unknown' & VicRace=='American Indian or Alaskan Native'))%>%
+  #Black Victims
+  mutate(`Female Black`=sum(VicSex=='Female'&VicRace=='Black'))%>%
+  mutate(`Male Black`=sum(VicSex=='Male' & VicRace=='Black'))%>%
+  mutate(`Unknown Black`=sum(VicSex=='Unknown'&VicRace=='Black'))%>%
+  #Asian Victims
+  mutate(`Female Asian`=sum(VicSex=='Female'&VicRace=='Asian'))%>%
+  mutate(`Male Asian`=sum(VicSex=='Male' & VicRace=='Asian'))%>%
+  mutate(`Unknown Asian`=sum(VicSex=='Unknown' & VicRace=='Asian'))%>%
+  #Unknown Victims
+  mutate(`Female Unknown Race`=sum(VicSex=='Female'& VicRace=='Unknown'))%>%
+  mutate(`Male Unknown Race`=sum(VicSex=='Male'& VicRace=='Unknown'))%>%
+  mutate(`Unknown Unknown Race`=sum(VicSex=='Unknown' &VicRace=='Unknown'))%>%
+  #Native Hawaiian/Pacific Islander
+  mutate(`Female N.H./P.I.`=sum(VicSex=='Female'&VicRace=='Native Hawaiian or Pacific Islander'))%>%
+  mutate(`Male N.H./P.I.`=sum(VicSex=='Male' & VicRace=='Native Hawaiian or Pacific Islander'))%>%
+  mutate(`Unknown N.H./P.I.`=sum(VicSex=='Unknown' & VicRace=='Native Hawaiian or Pacific Islander'))%>%
+  #Weapon sums
+  mutate(Handgun=sum(Weapon=='Handgun - pistol, revolver, etc'))%>%
+  mutate(`Knife or Cutting Instrument`=sum(Weapon=='Knife or cutting instrument'))%>%
+  mutate(`Other`=sum(Weapon=='Other or type unknown'))%>%
+  mutate(Explosives=sum(Weapon=='Explosives'))%>%
+  mutate(`Blunt Object`=sum(Weapon=='Blunt object - hammer, club, etc'))%>%
+  mutate(`Firearm, type not stated`=sum(Weapon=='Firearm, type not stated'))%>%
+  mutate(Rifle=sum(Weapon=='Rifle'))%>%
+  mutate(Shotgun=sum(Weapon=='Shotgun'))%>%
+  mutate(`Personal Weapons, includes beating`=sum(Weapon=='Personal weapons, includes beating'))%>%
+  mutate(`Strangulation - hanging`=sum(Weapon=='Strangulation - hanging'))%>%
+  mutate(`Pushed or thrown out window`=sum(Weapon=='Pushed or thrown out window'))%>%
+  mutate(Fire=sum(Weapon=='Fire'))%>%
+  mutate(`Narcotics or drugs, sleeping pills`=sum(Weapon=='Narcotics or drugs, sleeping pills'))%>%
+  mutate(Drowning=sum(Weapon=='Drowning'))%>%
+  mutate(`Other gun`=sum(Weapon=='Other gun'))%>%
+  mutate(`Asphyxiation - includes death by gas`=sum(Weapon=='Asphyxiation - includes death by gas'))%>%
+  mutate(`Poison - does not include gas`= sum(Weapon=='Poison - does not include gas'))
+
+#kable for racial solve rates - uses base table
+solve_rate_race <- supp_homi_fips%>%
+  mutate(min_year = input$years[1])%>% #Taking max and min year from selected input
+  mutate(max_year = input$years[2]) %>%
+  #mutate(min_year=2010)%>% #For Testing
+  #mutate(max_year=2019)%>% #For Testing
+  filter(Year >= min_year & Year <= max_year)%>%
+  filter(State==i)%>%
+  mutate(count=1)%>%
+  group_by(VicRace, Solved)%>% #not grouping by year because it is total solve rate
+  mutate(Total=sum(count))%>% #sum of solved/unsolved by race
+  select(VicRace, Solved, Total)%>%
+  unique()%>%
+  ungroup()%>%
+  spread(Solved, value=Total) #split into solved and unsolved
+
+#ifelse for when there are no unsolved - creates a no column with 0
+ifelse("No" %in% colnames(solve_rate_race),
+       
+       solve_rate_race <- solve_rate_race %>%
+         select(`Victim Race`=VicRace,Unsolved=No,Solved=Yes)%>%           ###PROBLEM WHEN NO UNSOLVED IS HERE
+         group_by(`Victim Race`)%>%
+         mutate(Unsolved=case_when(is.na(Unsolved)~0, #replacing NAs with 0s
+                                   TRUE~Unsolved))%>%
+         mutate(Solved=case_when(is.na(Solved)~0,
+                                 TRUE~Solved))%>%
+         mutate(`Solve Rate`=round((Solved/(sum(Solved, Unsolved)))*100,2)),
+       
+       solve_rate_race <- solve_rate_race %>%
+         mutate(No=0)%>%
+         select(`Victim Race`=VicRace,Unsolved=No,Solved=Yes)%>%           ###PROBLEM WHEN NO UNSOLVED IS HERE
+         group_by(`Victim Race`)%>%
+         mutate(Unsolved=case_when(is.na(Unsolved)~0, #replacing NAs with 0s
+                                   TRUE~Unsolved))%>%
+         mutate(Solved=case_when(is.na(Solved)~0,
+                                 TRUE~Solved))%>%
+         mutate(`Solve Rate`=round((Solved/(sum(Solved, Unsolved)))*100,2))
+)
+
+
+
+#Unsolved by Race and Sex Table
+unsolved_race_sex <- select(unsolved_homis, `Female White`,`Male White`, `Unknown White`, `Female A.I./A.N.`,`Male A.I./A.N.`,`Unknown A.I./A.N.`, `Female Black`,`Male Black`,`Unknown Black`,
+                            `Female Asian`, `Male Asian`, `Unknown Asian`, `Female Unknown Race`, `Male Unknown Race`, `Unknown Unknown Race`, `Female N.H./P.I.`, `Male N.H./P.I.`, `Unknown N.H./P.I.`) %>%
+  gather(`Female White`,`Male White`, `Unknown White`, `Female A.I./A.N.`,`Male A.I./A.N.`,`Unknown A.I./A.N.`, `Female Black`,`Male Black`,`Unknown Black`,
+         `Female Asian`, `Male Asian`, `Unknown Asian`, `Female Unknown Race`, `Male Unknown Race`, `Unknown Unknown Race`, `Female N.H./P.I.`, `Male N.H./P.I.`, `Unknown N.H./P.I.`,
+         key='Race', value='Count')%>%
+  unique()%>%
+  mutate(Sex=case_when(grepl('Female',Race)~'Female',      #grepl looks for pattern and then case when assigns it if it finds it
+                       grepl('Male',Race)~'Male',          #Assigning sex to split by race and sex
+                       grepl('Unknown',Race)~'Unknown'))%>%
+  mutate(Race=case_when(grepl('Black',Race)~'Black',
+                        grepl('White',Race)~'White',
+                        grepl('A.I./A.N.',Race)~'A.I./A.N.',
+                        grepl('Asian',Race)~'Asian',
+                        grepl('N.H./P.I.',Race)~'N.H./P.I.',
+                        grepl('Unknown Race',Race)~'Unknown'))
+
+#creating table for the kable
+unsolved_race_sex_kable <- unsolved_race_sex %>%
+  mutate(Race=case_when(Race=='A.I./A.N.'~'American Indian or Alaskan Native', #changing the graph abbreviations for the kable
+                        Race=='N.H./P.I.'~'Native Hawaiian or Pacific Islander',
+                        TRUE~Race))%>%
+  select(Race,Sex,Count)%>%
+  spread(key=Sex, value=Count)%>% #Split sex into separate columns
+  group_by(Race)%>%
+  mutate(Total=sum(Female,Male,Unknown))%>%
+  ungroup()%>%
+  mutate(`% of Unsolved Total`=round(Total/(sum(Total))*100,2))
+
+#breakdown by sex, race, circumstance, weapon
+#Table and map?
+
+```
+
+```{r race-sex, warning=FALSE,echo=FALSE, fig.width=6, fig.height=4}
+
+ggplot(data=unsolved_race_sex)+geom_histogram(aes(x=Race, y=Count, fill=Sex), stat='identity', position=position_stack()) +
+  #geom_text(aes(x=Race,y=Count, group=Sex, label=Count), position = position_stack(vjust=.5))+   #Removed Numbers due to jumble
+  theme_classic() + ggtitle(paste('Figure 2. Unsolved Homicides by Race and Sex',total_homi$min_year[[1]], 'to',total_homi$max_year[[1]])) + ylab('Count') +
+  xlab('Reported Victim Race') +
+  theme(plot.title = element_text(size=10))
+
+```
+
+```{r text-data-for-fig2, include=FALSE}
+
+#subsets out race and count with highest total
+most_race <- unsolved_race_sex_kable%>%
+  ungroup()%>%
+  top_n(1,Total) #selecting the highest count
+
+most_race[[1]] #subset the Race
+most_race[[5]] #subset the Count
+
+most_sex <- unsolved_race_sex%>%
+  ungroup()%>%
+  group_by(Sex)%>%
+  mutate(Sex_Total=sum(Count))%>%
+  select(Sex,Sex_Total)%>%
+  unique()%>%
+  ungroup()%>%
+  top_n(1,Sex_Total)
+
+most_sex[[1]] #Subset the Sex
+most_sex[[2]] #Subset the Count
+```
+
+Figure 2 above shows a breakdown of all unsolved homicides by race and sex. The `r most_race[[1]]` subgroup has the most unsolved homicides among the race subgroups with a total of `r most_race[[5]]`. The `r most_sex[[1]]` subgroup accounts for the most unsolved cases within the sex subgroups with `r most_sex[[2]]`. Table 1 below gives the exact counts by race and sex. These counts are based on the reported victim race for each unsolved homicide case. There may have been more than one victim of a different race, but the race of additional victims is not included in this dataset.
+
+
+```{r Race-Sex-Table, echo=FALSE,warning=FALSE}
+
+kable(unsolved_race_sex_kable, align = 'c', caption = paste("Unsolved Homicides by Race and Sex from",min_year,"to",max_year))
+
+```
+
+```{r race-solve, echo=FALSE,warning=FALSE}
+kable(solve_rate_race, align='c', caption = paste("Solve Rate by Race", min_year, "to",max_year))
+
+```
+
+\newpage
+
+## Murder Weapon - `r total_homi$min_year[[1]]` to `r total_homi$max_year[[1]]`
+
+```{r Murder-Weapon-Tables, include=FALSE}
+
+#taking unsolved homicide table and subsetting murder weapons
+murder_weap <- unsolved_homis %>%
+  select(Handgun,`Knife or Cutting Instrument`,`Other`,Explosives,`Blunt Object`,`Firearm, type not stated`,Rifle,Shotgun,`Personal Weapons, includes beating`,
+         `Strangulation - hanging`,`Pushed or thrown out window`,Fire,`Narcotics or drugs, sleeping pills`,Drowning,`Other gun`,`Asphyxiation - includes death by gas`,
+         `Poison - does not include gas`)%>%
+  unique()%>%
+  gather(Handgun,`Knife or Cutting Instrument`,`Other`,Explosives,`Blunt Object`,`Firearm, type not stated`,Rifle,Shotgun,`Personal Weapons, includes beating`,
+         `Strangulation - hanging`,`Pushed or thrown out window`,Fire,`Narcotics or drugs, sleeping pills`,Drowning,`Other gun`,`Asphyxiation - includes death by gas`,
+         `Poison - does not include gas`, key='Murder Weapon', value='Count') %>%
+  group_by(`Murder Weapon`)%>%
+  mutate(`Percent of Unsolved`=round((Count/total_homi$unsolved_homi[[1]])*100,2)) %>% #finding percent of unsolved by weapon
+  ungroup()%>%
+  arrange(desc(`Percent of Unsolved`))
+
+
+high_weap <- murder_weap %>%
+  filter(Count==max(Count))
+
+high_weap_count <- max(murder_weap$Count)
+high_weap_name <- high_weap[[1]]
+
+
+```
+
+Table 2 below looks at the murder weapons used in unsolved homicides. They are listed in descending order by the highest count. The percent column shows what percentage of unsolved homicides are made up by the murder weapon. Most unsolved homicides in `r i` are committed by `r high_weap_name` with a total of `r high_weap_count`.
+
+```{r Murder-Weapon-Kable}
+kable(murder_weap, align="c", caption=paste("Unsolved Homicides by Murder Weapon from",min_year,"to",max_year))
+```
+
+\newpage
+
+## Location - `r total_homi$min_year[[1]]` to `r total_homi$max_year[[1]]`
+
+The number of unsolved homicides in each county are totaled and used to create a heat map below. Gray counties represent counties that do not have any unsolved homicides reported. Counties that have higher numbers of unsolved homicides will be bright red and those with less will be lighter shades. Table 4 displays the top 10 counties within `r i` for unsolved homicides.
+
+```{r Map-Tables, include=FALSE}
+
+county_unsolved <- unsolved_homis %>% #using unsolved table - already filtered for unsolved
+  mutate(victims = VicCount+1)%>% #0 is used for one victim and anything after counts as additional victims
+  mutate(count=1)%>%
+  group_by(CNTYFIPS)%>% #grouping by county fips instead of agency - since I will be mapping by county
+  mutate(`County Unsolved`=sum(count)) #total of unsolved homicides by county
+
+
+map_county_allyears <- all_counties %>% #all counties is from tigris is unsolved_run_code script
+  left_join(county_unsolved, by=c('GEOID'='county_fips'))%>%
+  left_join(state_fips, by=c('STATEFP'='st_fips'))%>% #state_fips is from the census in unsolved_run_code script
+  filter(State_Name==i)%>%
+  select(State_Name, GEOID, `County Unsolved`, geometry)%>%
+  unique()
+
+county_unsolved_kab <- select(county_unsolved, County=CNTYFIPS, `Unsolved Homicide Count`=`County Unsolved`)%>%
+  unique()%>%
+  arrange(desc(`Unsolved Homicide Count`))
+
+county_unsolved_kab <- county_unsolved_kab[1:10,] %>% #takes the top 10 counties
+  filter(!is.na(County)) #removes na counties
+
+```
+
+```{r Unsolved-County-Map}
+
+ggplot(data=map_county_allyears) + geom_sf(aes(fill=`County Unsolved`)) +
+  geom_sf_text(aes(label=`County Unsolved`))+
+  scale_fill_gradient(low="white",high="red")+
+  theme_void() + ggtitle(paste("Map 1. Unsolved Homicides by County -",min_year,"to",max_year)) +
+  theme(plot.title = element_text(size=10))
+
+```
+
+```{r Unsolved-County-Kable}
+kable(county_unsolved_kab, align="c", caption=paste("Unsolved Homicides by Top 10 Counties from",min_year,"to",max_year))
+```
+
+*A full table is available in the appendix
+
+\newpage
+
+## APPENDIX
+
+The table below shows the full unsolved homicide count by counties from `r min_year` to `r max_year`
+
+```{r full_unsolved_county, include=FALSE}
+full_county_unsolved_kab <- select(county_unsolved, County=CNTYFIPS, `Unsolved Homicide Count`=`County Unsolved`)%>%
+  unique()%>%
+  arrange(desc(`Unsolved Homicide Count`))
+
+```
+
+```{r full_kab}
+kable(full_county_unsolved_kab)
+```
+
+The table below shows the full unsolved homicide count by counties from `r max_year-3` to `r max_year`
+
+```{r recent_unsolved_county, include=FALSE}
+
+unsolved_homis_recent <- supp_homi_fips %>%
+  filter(State==i)%>%
+  filter(Year >= (max_year-3))%>% #last 3 years
+  filter(Solved=='No')%>%
+  mutate(Female=sum(VicSex=='Female'))%>%
+  mutate(Male=sum(VicSex=='Male'))%>%
+  mutate(Unknown=sum(VicRace=='Unknown'))%>%
+  mutate(White=sum(VicRace=='White'))%>%
+  mutate(`American Indian or Alaskan Native`=sum(VicRace=='American Indian or Alaskan Native'))%>%
+  mutate(Black=sum(VicRace=='Black'))%>%
+  mutate(Asian=sum(VicRace=='Asian'))%>%
+  mutate(`Unknown Race`=sum(VicRace=='Unknown'))%>%
+  mutate(`Native Hawaiian or Pacific Islander`=sum(VicRace=='Native Hawaiian or Pacific Islander'))%>%
+  #White
+  mutate(`Female White`=sum(VicSex=='Female'&VicRace=='White'))%>%
+  mutate(`Male White`=sum(VicSex=='Male'&VicRace=='White'))%>%
+  mutate(`Unknown White`=sum(VicSex=='Unknown'&VicRace=='White'))%>%
+  #AI/NA
+  mutate(`Female A.I./N.A.`=sum(VicSex=='Female'&VicRace=='American Indian or Alaskan Native'))%>%
+  mutate(`Male A.I./N.A.`=sum(VicSex=='Male' & VicRace=='American Indian or Alaskan Native'))%>%
+  mutate(`Unknown A.I./N.A.`=sum(VicSex=='Unknown' & VicRace=='American Indian or Alaskan Native'))%>%
+  #Black
+  mutate(`Female Black`=sum(VicSex=='Female'&VicRace=='Black'))%>%
+  mutate(`Male Black`=sum(VicSex=='Male' & VicRace=='Black'))%>%
+  mutate(`Unknown Black`=sum(VicSex=='Unknown'&VicRace=='Black'))%>%
+  #Asian
+  mutate(`Female Asian`=sum(VicSex=='Female'&VicRace=='Asian'))%>%
+  mutate(`Male Asian`=sum(VicSex=='Male' & VicRace=='Asian'))%>%
+  mutate(`Unknown Asian`=sum(VicSex=='Unknown' & VicRace=='Asian'))%>%
+  #Unknown
+  mutate(`Female Unknown Race`=sum(VicSex=='Female'& VicRace=='Unknown'))%>%
+  mutate(`Male Unknown Race`=sum(VicSex=='Male'& VicRace=='Unknown'))%>%
+  mutate(`Unknown Unknown Race`=sum(VicSex=='Unknown' &VicRace=='Unknown'))%>%
+  #NH/PI
+  mutate(`Female N.H./P.I.`=sum(VicSex=='Female'&VicRace=='Native Hawaiian or Pacific Islander'))%>%
+  mutate(`Male N.H./P.I.`=sum(VicSex=='Male' & VicRace=='Native Hawaiian or Pacific Islander'))%>%
+  mutate(`Unknown N.H./P.I.`=sum(VicSex=='Unknown' & VicRace=='Native Hawaiian or Pacific Islander'))%>%
+  #Weapons
+  mutate(Handgun=sum(Weapon=='Handgun - pistol, revolver, etc'))%>%
+  mutate(`Knife or Cutting Instrument`=sum(Weapon=='Knife or cutting instrument'))%>%
+  mutate(`Other`=sum(Weapon=='Other or type unknown'))%>%
+  mutate(Explosives=sum(Weapon=='Explosives'))%>%
+  mutate(`Blunt Object`=sum(Weapon=='Blunt object - hammer, club, etc'))%>%
+  mutate(`Firearm, type not stated`=sum(Weapon=='Firearm, type not stated'))%>%
+  mutate(Rifle=sum(Weapon=='Rifle'))%>%
+  mutate(Shotgun=sum(Weapon=='Shotgun'))%>%
+  mutate(`Personal Weapons, includes beating`=sum(Weapon=='Personal weapons, includes beating'))%>%
+  mutate(`Strangulation - hanging`=sum(Weapon=='Strangulation - hanging'))%>%
+  mutate(`Pushed or thrown out window`=sum(Weapon=='Pushed or thrown out window'))%>%
+  mutate(Fire=sum(Weapon=='Fire'))%>%
+  mutate(`Narcotics or drugs, sleeping pills`=sum(Weapon=='Narcotics or drugs, sleeping pills'))%>%
+  mutate(Drowning=sum(Weapon=='Drowning'))%>%
+  mutate(`Other gun`=sum(Weapon=='Other gun'))%>%
+  mutate(`Asphyxiation - includes death by gas`=sum(Weapon=='Asphyxiation - includes death by gas'))%>%
+  mutate(`Poison - does not include gas`= sum(Weapon=='Poison - does not include gas'))
+
+unsolved_race_sex_recent <- select(unsolved_homis_recent, `Female White`,`Male White`, `Unknown White`, `Female A.I./N.A.`,`Male A.I./N.A.`,`Unknown A.I./N.A.`, `Female Black`,`Male Black`,`Unknown Black`,
+                            `Female Asian`, `Male Asian`, `Unknown Asian`, `Female Unknown Race`, `Male Unknown Race`, `Unknown Unknown Race`, `Female N.H./P.I.`, `Male N.H./P.I.`, `Unknown N.H./P.I.`) %>%
+  gather(`Female White`,`Male White`, `Unknown White`, `Female A.I./N.A.`,`Male A.I./N.A.`,`Unknown A.I./N.A.`, `Female Black`,`Male Black`,`Unknown Black`,
+                            `Female Asian`, `Male Asian`, `Unknown Asian`, `Female Unknown Race`, `Male Unknown Race`, `Unknown Unknown Race`, `Female N.H./P.I.`, `Male N.H./P.I.`, `Unknown N.H./P.I.`,
+         key='Race', value='Count')%>%
+  unique()%>%
+  mutate(Sex=case_when(grepl('Female',Race)~'Female',
+                       grepl('Male',Race)~'Male',
+                       grepl('Unknown',Race)~'Unknown'))%>%
+  mutate(Race=case_when(grepl('Black',Race)~'Black',
+                        grepl('White',Race)~'White',
+                        grepl('A.I./N.A.',Race)~'A.I./N.A.',
+                        grepl('Asian',Race)~'Asian',
+                        grepl('N.H./P.I.',Race)~'N.H./P.I.',
+                        grepl('Unknown Race',Race)~'Unknown'))
+
+unsolved_race_sex_kable_recent <- unsolved_race_sex_recent %>%
+  mutate(Race=case_when(Race=='A.I./N.A.'~'American Indian or Alaskan Native',
+                        Race=='N.H./P.I.'~'Native Hawaiian or Pacific Islander',
+                        TRUE~Race))%>%
+  select(Race,Sex,Count)%>%
+  spread(key=Sex, value=Count)%>%
+  group_by(Race)%>%
+  mutate(Total=sum(Female,Male,Unknown))%>%
+  ungroup()%>%
+  mutate(`% of Unsolved Total`=round(Total/(sum(Total))*100,2))
+
+full_county_unsolved_yr_disagg <- unsolved_homis_recent %>%
+  mutate(count=1)%>%
+  group_by(CNTYFIPS, Year)%>%
+  mutate(Year_Unsolved=sum(count)) %>%
+  ungroup()%>%
+  select(County=CNTYFIPS, Year, Year_Unsolved)%>%
+  unique()%>%
+  spread(`Year_Unsolved`, key="Year")
+
+full_county_unsolved_yr_disagg[is.na(full_county_unsolved_yr_disagg)] <- 0  #Replace NAs with 0
+
+full_county_unsolved_yr_disagg <- full_county_unsolved_yr_disagg%>%
+  mutate(`Unsolved Total`=rowSums(full_county_unsolved_yr_disagg[,-1]))%>% #sums all rows except first one - MONEY
+  arrange(desc(`Unsolved Total`))
+```
+
+```{r full_recent_kab}
+kable(full_county_unsolved_yr_disagg)
+```
